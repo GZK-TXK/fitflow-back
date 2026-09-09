@@ -1,112 +1,158 @@
-import prisma from '../db.js';
+import { PrismaClient } from '@prisma/client';
 
-// GET: Obtener todos los entrenamientos
+const prisma = new PrismaClient();
+
+// Obtener todos los workouts pertenecientes a los clientes del usuario autenticado
 export const getWorkouts = async (req, res) => {
   try {
+    const userId = req.user.userId;
+
     const workouts = await prisma.workout.findMany({
+      where: {
+        client: {
+          userId, // Filtra solo rutinas de clientes pertenecientes al entrenador
+        },
+      },
       include: {
-        client: true,
+        client: {
+          select: { id: true, name: true, email: true },
+        },
+        items: {
+          include: {
+            exercise: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(workouts);
+
+    return res.status(200).json(workouts);
   } catch (error) {
-    console.error('Error al obtener entrenamientos:', error);
-    res.status(500).json({ error: 'Error al obtener entrenamientos' });
+    console.error('Error al obtener workouts:', error);
+    return res.status(500).json({ error: 'Error al obtener la lista de rutinas' });
   }
 };
 
-// GET: Obtener un entrenamiento por ID
+// Obtener un workout específico por ID
 export const getWorkoutById = async (req, res) => {
   try {
     const { id } = req.params;
-    const workout = await prisma.workout.findUnique({
-      where: { id },
-      include: { client: true },
-    });
+    const userId = req.user.userId;
 
-    if (!workout) {
-      return res.status(404).json({ error: 'Entrenamiento no encontrado' });
-    }
-
-    res.json(workout);
-  } catch (error) {
-    console.error('Error al obtener entrenamiento:', error);
-    res.status(500).json({ error: 'Error al obtener el entrenamiento' });
-  }
-};
-
-// POST: Crear un nuevo entrenamiento
-export const createWorkout = async (req, res) => {
-  try {
-    const { title, name, description, notes, content, clientId } = req.body;
-
-    const workoutTitle = title || name;
-    const workoutDescription = description || notes;
-
-    if (!workoutTitle || !clientId) {
-      return res.status(400).json({
-        error: 'El título/nombre y el clientId son obligatorios',
-      });
-    }
-
-    const newWorkout = await prisma.workout.create({
-      data: {
-        title: workoutTitle,
-        description: workoutDescription,
-        content: content || {},
-        client: {
-          connect: { id: clientId },
+    const workout = await prisma.workout.findFirst({
+      where: {
+        id,
+        client: { userId },
+      },
+      include: {
+        client: true,
+        items: {
+          include: {
+            exercise: true,
+          },
+          orderBy: { order: 'asc' },
         },
       },
     });
 
-    res.status(201).json(newWorkout);
+    if (!workout) {
+      return res.status(404).json({ error: 'Rutina no encontrada o sin permisos' });
+    }
+
+    return res.status(200).json(workout);
   } catch (error) {
-    console.error('Error al crear entrenamiento:', error);
-    res.status(500).json({ error: 'Error al crear el entrenamiento' });
+    console.error('Error al obtener el workout:', error);
+    return res.status(500).json({ error: 'Error al obtener los detalles de la rutina' });
   }
 };
 
-// PUT: Actualizar un entrenamiento existente
+// Crear una nueva rutina
+export const createWorkout = async (req, res) => {
+  try {
+    const { title, description, clientId } = req.body;
+    const userId = req.user.userId;
+
+    if (!title || !clientId) {
+      return res.status(400).json({ error: 'El título y el clientId son obligatorios' });
+    }
+
+    // Verificar que el cliente pertenece al entrenador autenticado
+    const client = await prisma.client.findFirst({
+      where: { id: clientId, userId },
+    });
+
+    if (!client) {
+      return res.status(404).json({ error: 'Cliente no encontrado o no pertenece a tu usuario' });
+    }
+
+    const newWorkout = await prisma.workout.create({
+      data: {
+        title,
+        description,
+        client: {
+          connect: { id: clientId },
+        },
+      },
+      include: {
+        client: true,
+      },
+    });
+
+    return res.status(201).json(newWorkout);
+  } catch (error) {
+    console.error('Error al crear workout:', error);
+    return res.status(500).json({ error: 'Error al crear la rutina' });
+  }
+};
+
+// Actualizar una rutina existente
 export const updateWorkout = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, name, description, notes, content, clientId } = req.body;
+    const { title, description } = req.body;
+    const userId = req.user.userId;
 
-    const workoutTitle = title || name;
-    const workoutDescription = description || notes;
+    const existingWorkout = await prisma.workout.findFirst({
+      where: { id, client: { userId } },
+    });
 
-    const dataToUpdate = {};
-    if (workoutTitle) dataToUpdate.title = workoutTitle;
-    if (workoutDescription !== undefined) dataToUpdate.description = workoutDescription;
-    if (content !== undefined) dataToUpdate.content = content;
-    if (clientId) {
-      dataToUpdate.client = {
-        connect: { id: clientId },
-      };
+    if (!existingWorkout) {
+      return res.status(404).json({ error: 'Rutina no encontrada o sin permisos' });
     }
 
     const updatedWorkout = await prisma.workout.update({
       where: { id },
-      data: dataToUpdate,
+      data: { title, description },
     });
 
-    res.json(updatedWorkout);
+    return res.status(200).json(updatedWorkout);
   } catch (error) {
-    console.error('Error al actualizar entrenamiento:', error);
-    res.status(500).json({ error: 'Error al actualizar el entrenamiento' });
+    console.error('Error al actualizar workout:', error);
+    return res.status(500).json({ error: 'Error al actualizar la rutina' });
   }
 };
 
-// DELETE: Eliminar un entrenamiento
+// Eliminar una rutina
 export const deleteWorkout = async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.workout.delete({ where: { id } });
-    res.json({ message: 'Entrenamiento eliminado correctamente' });
+    const userId = req.user.userId;
+
+    const existingWorkout = await prisma.workout.findFirst({
+      where: { id, client: { userId } },
+    });
+
+    if (!existingWorkout) {
+      return res.status(404).json({ error: 'Rutina no encontrada o sin permisos' });
+    }
+
+    await prisma.workout.delete({
+      where: { id },
+    });
+
+    return res.status(200).json({ message: 'Rutina eliminada correctamente' });
   } catch (error) {
-    console.error('Error al eliminar entrenamiento:', error);
-    res.status(500).json({ error: 'Error al eliminar el entrenamiento' });
+    console.error('Error al eliminar workout:', error);
+    return res.status(500).json({ error: 'Error al eliminar la rutina' });
   }
-};
+};  

@@ -1,45 +1,59 @@
-import prisma from '../db.js';
+import { PrismaClient } from '@prisma/client';
 
-// 1. Obtener todos los clientes
+const prisma = new PrismaClient();
+
+// Obtener todos los clientes del usuario autenticado
 export const getClients = async (req, res) => {
   try {
+    const userId = req.user.userId;
+
     const clients = await prisma.client.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(clients);
+
+    return res.status(200).json(clients);
   } catch (error) {
     console.error('Error al obtener clientes:', error);
-    res.status(500).json({ error: 'Error al obtener clientes' });
+    return res.status(500).json({ error: 'Error al obtener la lista de clientes' });
   }
 };
 
-// 2. Obtener un solo cliente por ID
+// Obtener un cliente específico por ID
 export const getClientById = async (req, res) => {
   try {
     const { id } = req.params;
-    const client = await prisma.client.findUnique({
-      where: { id },
+    const userId = req.user.userId;
+
+    const client = await prisma.client.findFirst({
+      where: {
+        id,
+        userId, // Garantiza que solo el dueño del cliente pueda acceder
+      },
+      include: {
+        workouts: true,
+      },
     });
 
     if (!client) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    res.json(client);
+    return res.status(200).json(client);
   } catch (error) {
-    console.error('Error al obtener cliente por ID:', error);
-    res.status(500).json({ error: 'Error al obtener el cliente' });
+    console.error('Error al obtener el cliente:', error);
+    return res.status(500).json({ error: 'Error al obtener los detalles del cliente' });
   }
 };
 
-// 3. Crear un nuevo cliente
+// Crear un nuevo cliente
 export const createClient = async (req, res) => {
   try {
-    const { name, email, phone, status, paymentStatus, userId } = req.body;
+    const { name, email, phone, notes } = req.body;
+    const userId = req.user.userId;
 
-    // Validación básica de campos requeridos
-    if (!name || !userId) {
-      return res.status(400).json({ error: 'El nombre y el userId son obligatorios' });
+    if (!name) {
+      return res.status(400).json({ error: 'El nombre del cliente es obligatorio' });
     }
 
     const newClient = await prisma.client.create({
@@ -47,51 +61,70 @@ export const createClient = async (req, res) => {
         name,
         email,
         phone,
-        status,
-        paymentStatus,
-        trainer: {
-          connect: { id: userId },
+        notes,
+        user: {
+          connect: { id: userId }, // Utiliza 'user' respetando el schema.prisma
         },
       },
     });
 
-    res.status(201).json(newClient);
+    return res.status(201).json(newClient);
   } catch (error) {
     console.error('Error detallado al crear cliente:', error);
-    res.status(500).json({ error: 'Error al crear el cliente' });
+    return res.status(500).json({ error: 'Error al crear el cliente' });
   }
 };
 
-// 4. Actualizar un cliente
+// Actualizar un cliente existente
 export const updateClient = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, status, paymentStatus } = req.body;
+    const { name, email, phone, notes } = req.body;
+    const userId = req.user.userId;
+
+    // Verificar pertenencia del cliente
+    const existingClient = await prisma.client.findFirst({
+      where: { id, userId },
+    });
+
+    if (!existingClient) {
+      return res.status(404).json({ error: 'Cliente no encontrado o sin permisos' });
+    }
 
     const updatedClient = await prisma.client.update({
       where: { id },
-      data: { name, email, phone, status, paymentStatus },
+      data: { name, email, phone, notes },
     });
 
-    res.json(updatedClient);
+    return res.status(200).json(updatedClient);
   } catch (error) {
     console.error('Error al actualizar cliente:', error);
-    res.status(500).json({ error: 'Error al actualizar el cliente' });
+    return res.status(500).json({ error: 'Error al actualizar el cliente' });
   }
 };
 
-// 5. Eliminar un cliente
+// Eliminar un cliente
 export const deleteClient = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user.userId;
+
+    // Verificar pertenencia del cliente
+    const existingClient = await prisma.client.findFirst({
+      where: { id, userId },
+    });
+
+    if (!existingClient) {
+      return res.status(404).json({ error: 'Cliente no encontrado o sin permisos' });
+    }
 
     await prisma.client.delete({
       where: { id },
     });
 
-    res.json({ message: 'Cliente eliminado correctamente' });
+    return res.status(200).json({ message: 'Cliente eliminado correctamente' });
   } catch (error) {
     console.error('Error al eliminar cliente:', error);
-    res.status(500).json({ error: 'Error al eliminar el cliente' });
+    return res.status(500).json({ error: 'Error al eliminar el cliente' });
   }
 };

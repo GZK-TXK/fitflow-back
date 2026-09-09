@@ -1,59 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-// 1. EL ENTRENADOR (Usuario principal de tu SaaS)
 model User {
   id               String   @id @default(cuid())
   email            String   @unique
   name             String?
-  stripeCustomerId String?  @unique
+  password         String?  // Campo necesario para auth con JWT / bcryptjs
+  stripeCustomerId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  clients          Client[]
-  exercises        Exercise[]
+  clients   Client[]
+  exercises Exercise[]
 }
 
-// 2. EL ALUMNO / CLIENTE DEL ENTRENADOR
 model Client {
-  id            String    @id @default(cuid())
-  name          String
-  email         String
-  phone         String?
-  status        String    @default("ACTIVE") // ACTIVE, INACTIVE
-  paymentStatus String    @default("PAID")   // PAID, UNPAID, OVERDUE
-  trainerId     String
-  trainer       User      @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  createdAt     DateTime  @default(now())
-
-  workouts      Workout[]
+  id        String    @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  notes     String?
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workouts  Workout[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
-// 3. BIBLIOTECA DE EJERCICIOS DEL ENTRENADOR
 model Exercise {
-  id          String   @id @default(cuid())
-  name        String
-  category    String?  // Ej. Pecho, Pierna, Cardio
-  videoUrl    String?  // Enlace a YouTube/Vimeo
-  trainerId   String
-  trainer     User      @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  category       String?
+  videoUrl       String?
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutItems   WorkoutItem[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
-// 4. RUTINAS DE ENTRENAMIENTO ASIGNADAS A CLIENTES
 model Workout {
-  id          String   @id @default(cuid())
-  title       String   // Ej. "Rutina Hipertrofia - Día 1"
+  id          String        @id @default(cuid())
+  title       String
   description String?
   clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  content     Json     // Guardamos la estructura de series, reps y ejercicios en JSON
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items       WorkoutItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model WorkoutItem {
+  id         String   @id @default(cuid())
+  workoutId  String
+  workout    Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exerciseId String
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  sets       Int?
+  reps       Int?
+  weight     Float?
+  restTime   Int?     // Tiempo de descanso en segundos
+  order      Int      @default(0)
 }
