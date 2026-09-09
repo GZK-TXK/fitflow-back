@@ -1,0 +1,59 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. EL ENTRENADOR (Usuario principal de tu SaaS)
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  name             String?
+  stripeCustomerId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  clients          Client[]
+  exercises        Exercise[]
+}
+
+// 2. EL ALUMNO / CLIENTE DEL ENTRENADOR
+model Client {
+  id            String    @id @default(cuid())
+  name          String
+  email         String
+  phone         String?
+  status        String    @default("ACTIVE") // ACTIVE, INACTIVE
+  paymentStatus String    @default("PAID")   // PAID, UNPAID, OVERDUE
+  trainerId     String
+  trainer       User      @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+
+  workouts      Workout[]
+}
+
+// 3. BIBLIOTECA DE EJERCICIOS DEL ENTRENADOR
+model Exercise {
+  id          String   @id @default(cuid())
+  name        String
+  category    String?  // Ej. Pecho, Pierna, Cardio
+  videoUrl    String?  // Enlace a YouTube/Vimeo
+  trainerId   String
+  trainer     User      @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+// 4. RUTINAS DE ENTRENAMIENTO ASIGNADAS A CLIENTES
+model Workout {
+  id          String   @id @default(cuid())
+  title       String   // Ej. "Rutina Hipertrofia - Día 1"
+  description String?
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  content     Json     // Guardamos la estructura de series, reps y ejercicios en JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
