@@ -9,6 +9,7 @@ import authRoutes from './routes/authRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
 import exerciseRoutes from './routes/exerciseRoutes.js';
 import workoutRoutes from './routes/workoutRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 // Importación de middlewares propios
 import { errorHandler } from './middlewares/errorHandler.js';
@@ -77,6 +78,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/exercises', exerciseRoutes);
 app.use('/api/workouts', workoutRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Ruta no encontrada (404)
 app.use((req, res) => {
