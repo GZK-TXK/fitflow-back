@@ -73,6 +73,11 @@ const authLimiter = rateLimit({
   message: { error: 'Demasiados intentos de autenticación, espera 15 minutos' },
 });
 
+// Health check (para el hosting)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // Registro de Rutas de la API
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/clients', clientRoutes);
