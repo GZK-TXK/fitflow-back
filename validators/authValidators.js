@@ -28,3 +28,7 @@ export const loginRules = [
     .isString().withMessage('La contraseña debe ser texto')
     .notEmpty().withMessage('La contraseña es obligatoria'),
 ]
+
+export const googleLoginRules = [
+  body('idToken').isString().notEmpty().withMessage('El idToken es obligatorio'),
+]
