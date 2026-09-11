@@ -1,102 +1,63 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import prisma from '../db.js';
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import prisma from '../db.js'
 
-// POST: Registrar un nuevo entrenador
-export const register = async (req, res) => {
+const buildToken = (user) =>
+  jwt.sign(
+    { userId: user.id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  )
+
+export const register = async (req, res, next) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name } = req.body
 
-    if (!email || !password || !name) {
-      return res.status(400).json({ error: 'Email, contraseña y nombre son obligatorios' });
-    }
-
-    // Verificar si el usuario ya existe
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const existingUser = await prisma.user.findUnique({ where: { email } })
     if (existingUser) {
-      return res.status(400).json({ error: 'El email ya está registrado' });
+      return res.status(409).json({ error: 'El email ya está registrado' })
     }
 
-    // Encriptar contraseña
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Crear el usuario
     const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-      },
-    });
+      data: { email, password: hashedPassword, name },
+    })
 
-    // Generar Token JWT
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    const token = buildToken(user)
 
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Usuario registrado correctamente',
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-    });
+      user: { id: user.id, email: user.email, name: user.name },
+    })
   } catch (error) {
-    console.error('Error en registro:', error);
-    res.status(500).json({ error: 'Error al registrar el usuario' });
+    return next(error)
   }
-};
+}
 
-// POST: Iniciar sesión
-export const login = async (req, res) => {
+export const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email y contraseña son obligatorios' });
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (!user || !user.password) {
+      return res.status(401).json({ error: 'Credenciales inválidas' })
     }
 
-    // Buscar el usuario por email
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      return res.status(400).json({ error: 'Credenciales inválidas' });
-    }
-
-    // Validar la contraseña
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password)
     if (!isMatch) {
-      return res.status(400).json({ error: 'Credenciales inválidas' });
+      return res.status(401).json({ error: 'Credenciales inválidas' })
     }
 
-    // Generar Token JWT
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    const token = buildToken(user)
 
-    res.json({
+    return res.json({
       message: 'Inicio de sesión exitoso',
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-    });
+      user: { id: user.id, email: user.email, name: user.name },
+    })
   } catch (error) {
-    console.error('Error en login:', error);
-    res.status(500).json({ error: 'Error al iniciar sesión' });
+    return next(error)
   }
-};
+}

@@ -1,21 +1,32 @@
-import { Router } from 'express';
+import { Router } from 'express'
 import {
   getWorkouts,
   getWorkoutById,
   createWorkout,
   updateWorkout,
   deleteWorkout,
-} from '../controllers/workoutController.js';
-import { authenticateToken } from '../middlewares/authMiddleware.js';
+} from '../controllers/workoutController.js'
+import { addWorkoutItem } from '../controllers/workoutItemController.js'
+import { authenticateToken } from '../middlewares/authMiddleware.js'
+import { validate } from '../middlewares/validate.js'
+import {
+  workoutIdRule,
+  createWorkoutRules,
+  updateWorkoutRules,
+} from '../validators/workoutValidators.js'
+import { addWorkoutItemRules } from '../validators/workoutItemValidators.js'
 
-const router = Router();
+const router = Router()
 
-router.use(authenticateToken);
+router.use(authenticateToken)
 
-router.get('/', getWorkouts);
-router.get('/:id', getWorkoutById);
-router.post('/', createWorkout);
-router.put('/:id', updateWorkout);
-router.delete('/:id', deleteWorkout);
+router.get('/', getWorkouts)
+router.get('/:id', workoutIdRule, validate, getWorkoutById)
+router.post('/', createWorkoutRules, validate, createWorkout)
+router.put('/:id', workoutIdRule, updateWorkoutRules, validate, updateWorkout)
+router.delete('/:id', workoutIdRule, validate, deleteWorkout)
 
-export default router;
+// Añadir un ejercicio a una rutina
+router.post('/:id/items', workoutIdRule, addWorkoutItemRules, validate, addWorkoutItem)
+
+export default router
