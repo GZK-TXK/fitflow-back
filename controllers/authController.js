@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import prisma from '../db.js'
-import { getFirebaseAdmin } from '../lib/firebaseAdmin.js'
+import { getFirebaseAuth } from '../lib/firebaseAdmin.js'
 
 const buildToken = (user) =>
   jwt.sign(
@@ -69,8 +69,9 @@ export const googleLogin = async (req, res, next) => {
 
     let decoded
     try {
-      decoded = await getFirebaseAdmin().auth().verifyIdToken(idToken, true)
-    } catch {
+      decoded = await getFirebaseAuth().verifyIdToken(idToken)
+    } catch (error) {
+      console.error('verifyIdToken error:', error.code || error.message)
       return res.status(401).json({ error: 'Token de Google inválido o expirado' })
     }
 
