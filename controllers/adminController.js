@@ -2,14 +2,15 @@ import prisma from '../db.js'
 
 export const getStats = async (req, res, next) => {
   try {
-    const [trainers, clients, exercises, workouts] = await Promise.all([
+    const [trainers, clients, exercises, workouts, pending] = await Promise.all([
       prisma.user.count(),
       prisma.client.count(),
       prisma.exercise.count(),
       prisma.workout.count(),
+      prisma.user.count({ where: { status: 'PENDING' } }),
     ])
 
-    return res.json({ trainers, clients, exercises, workouts })
+    return res.json({ trainers, clients, exercises, workouts, pending })
   } catch (error) {
     return next(error)
   }
@@ -23,6 +24,7 @@ export const getTrainers = async (req, res, next) => {
         email: true,
         name: true,
         role: true,
+        status: true,
         createdAt: true,
         _count: { select: { clients: true, exercises: true } },
       },
@@ -30,6 +32,57 @@ export const getTrainers = async (req, res, next) => {
     })
 
     return res.json(trainers)
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const getUsers = async (req, res, next) => {
+  try {
+    const { role } = req.query
+    const where = role ? { role } : {}
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        _count: { select: { clients: true, exercises: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return res.json(users)
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const updateUserStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body
+
+    if (id === req.user.userId) {
+      return res.status(400).json({ error: 'No puedes cambiar tu propio estado' })
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { status },
+    })
+
+    return res.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+    })
   } catch (error) {
     return next(error)
   }

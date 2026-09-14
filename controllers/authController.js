@@ -21,16 +21,19 @@ export const register = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    const user = await prisma.user.create({
-      data: { email, password: hashedPassword, name },
+    await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        name,
+        role: 'TRAINER',
+        status: 'PENDING',
+      },
     })
 
-    const token = buildToken(user)
-
     return res.status(201).json({
-      message: 'Usuario registrado correctamente',
-      token,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      message: 'Cuenta creada. Queda pendiente de aprobación por el administrador.',
+      pendingApproval: true,
     })
   } catch (error) {
     return next(error)
@@ -49,6 +52,18 @@ export const login = async (req, res, next) => {
     const isMatch = await bcrypt.compare(password, user.password)
     if (!isMatch) {
       return res.status(401).json({ error: 'Credenciales inválidas' })
+    }
+
+    if (user.status === 'PENDING') {
+      return res
+        .status(403)
+        .json({ error: 'Tu cuenta está pendiente de aprobación', code: 'PENDING' })
+    }
+    if (user.status === 'DISABLED') {
+      return res.status(403).json({
+        error: 'Tu cuenta está desactivada. Contacta con el administrador.',
+        code: 'DISABLED',
+      })
     }
 
     const token = buildToken(user)
@@ -85,17 +100,37 @@ export const googleLogin = async (req, res, next) => {
     })
 
     if (!user) {
-      user = await prisma.user.create({
+      await prisma.user.create({
         data: {
           email,
           name: name || email.split('@')[0],
           firebaseUid: uid,
+          role: 'TRAINER',
+          status: 'PENDING',
         },
       })
-    } else if (!user.firebaseUid) {
+      return res.status(403).json({
+        error: 'Cuenta creada. Queda pendiente de aprobación por el administrador.',
+        code: 'PENDING',
+      })
+    }
+
+    if (!user.firebaseUid) {
       user = await prisma.user.update({
         where: { id: user.id },
         data: { firebaseUid: uid },
+      })
+    }
+
+    if (user.status === 'PENDING') {
+      return res
+        .status(403)
+        .json({ error: 'Tu cuenta está pendiente de aprobación', code: 'PENDING' })
+    }
+    if (user.status === 'DISABLED') {
+      return res.status(403).json({
+        error: 'Tu cuenta está desactivada. Contacta con el administrador.',
+        code: 'DISABLED',
       })
     }
 

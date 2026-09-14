@@ -20,7 +20,10 @@ export const getClientById = async (req, res, next) => {
 
     const client = await prisma.client.findFirst({
       where: { id, userId },
-      include: { workouts: true },
+      include: {
+        workouts: true,
+        account: { select: { email: true } },
+      },
     })
 
     if (!client) {
@@ -89,6 +92,77 @@ export const deleteClient = async (req, res, next) => {
     await prisma.client.delete({ where: { id } })
 
     return res.status(200).json({ message: 'Cliente eliminado correctamente' })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const inviteClientAccess = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const userId = req.user.userId
+
+    const client = await prisma.client.findFirst({ where: { id, userId } })
+    if (!client) {
+      return res.status(404).json({ error: 'Cliente no encontrado o sin permisos' })
+    }
+
+    if (!client.email) {
+      return res.status(400).json({ error: 'El cliente necesita un email para darle acceso' })
+    }
+
+    const email = client.email.trim().toLowerCase()
+    const existingUser = await prisma.user.findUnique({ where: { email } })
+
+    if (existingUser && existingUser.role !== 'CLIENT') {
+      return res
+        .status(409)
+        .json({ error: 'Ese email ya pertenece a una cuenta de entrenador o admin' })
+    }
+
+    const account =
+      existingUser ||
+      (await prisma.user.create({
+        data: { email, name: client.name, role: 'CLIENT' },
+      }))
+
+    const linkedElsewhere = await prisma.client.findFirst({
+      where: { accountUserId: account.id, NOT: { id: client.id } },
+    })
+    if (linkedElsewhere) {
+      return res.status(409).json({ error: 'Esa cuenta ya está vinculada a otro cliente' })
+    }
+
+    await prisma.client.update({
+      where: { id: client.id },
+      data: { accountUserId: account.id },
+    })
+
+    return res.status(200).json({
+      message: 'Acceso concedido. El cliente puede entrar con Google usando ese email.',
+      accountEmail: account.email,
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const revokeClientAccess = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const userId = req.user.userId
+
+    const client = await prisma.client.findFirst({ where: { id, userId } })
+    if (!client) {
+      return res.status(404).json({ error: 'Cliente no encontrado o sin permisos' })
+    }
+
+    await prisma.client.update({
+      where: { id: client.id },
+      data: { accountUserId: null },
+    })
+
+    return res.status(200).json({ message: 'Acceso revocado' })
   } catch (error) {
     return next(error)
   }

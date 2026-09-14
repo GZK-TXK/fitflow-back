@@ -11,52 +11,59 @@ model User {
   id               String   @id @default(cuid())
   email            String   @unique
   name             String
+  phone            String?
   password         String?
   firebaseUid      String?  @unique
   role             String   @default("TRAINER")
+  status           String   @default("ACTIVE")
   stripeCustomerId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  clients   Client[]
-  exercises Exercise[]
+  clients       Client[] @relation("TrainerClients")
+  clientAccount Client?  @relation("ClientAccount")
+  exercises     Exercise[]
 }
 
 model Client {
-  id        String    @id @default(cuid())
-  name      String
-  email     String?
-  phone     String?
-  notes     String?
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workouts  Workout[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                String             @id @default(cuid())
+  name              String
+  email             String?
+  phone             String?
+  notes             String?
+  userId            String
+  user              User               @relation("TrainerClients", fields: [userId], references: [id], onDelete: Cascade)
+  accountUserId     String?            @unique
+  account           User?              @relation("ClientAccount", fields: [accountUserId], references: [id], onDelete: SetNull)
+  workouts          Workout[]
+  scheduledWorkouts ScheduledWorkout[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model Exercise {
-  id             String          @id @default(cuid())
-  name           String
-  description    String?
-  category       String?
-  videoUrl       String?
-  userId         String
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workoutItems   WorkoutItem[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id           String          @id @default(cuid())
+  name         String
+  description  String?
+  category     String?
+  videoUrl     String?
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutItems WorkoutItem[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
 
 model Workout {
-  id          String        @id @default(cuid())
-  title       String
-  description String?
-  clientId    String
-  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  items       WorkoutItem[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                String             @id @default(cuid())
+  title             String
+  description       String?
+  clientId          String
+  client            Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items             WorkoutItem[]
+  scheduledWorkouts ScheduledWorkout[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model WorkoutItem {
@@ -68,6 +75,18 @@ model WorkoutItem {
   sets       Int?
   reps       Int?
   weight     Float?
-  restTime   Int?     // Tiempo de descanso en segundos
+  restTime   Int?
   order      Int      @default(0)
+}
+
+model ScheduledWorkout {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workoutId String
+  workout   Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
