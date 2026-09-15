@@ -16,6 +16,7 @@ export const registerRules = [
     .trim()
     .notEmpty().withMessage('El nombre es obligatorio')
     .isLength({ min: 2, max: 80 }).withMessage('El nombre debe tener entre 2 y 80 caracteres'),
+  body('inviteToken').isString().notEmpty().withMessage('La invitación es obligatoria'),
 ]
 
 export const loginRules = [
@@ -31,4 +32,5 @@ export const loginRules = [
 
 export const googleLoginRules = [
   body('idToken').isString().notEmpty().withMessage('El idToken es obligatorio'),
+  body('inviteToken').optional({ values: 'falsy' }).isString(),
 ]

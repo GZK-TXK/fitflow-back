@@ -5,7 +5,7 @@ export const requireClient = async (req, res, next) => {
     const client = await prisma.client.findUnique({
       where: { accountUserId: req.user.userId },
       include: {
-        user: { select: { name: true, email: true, phone: true } },
+        user: { select: { name: true, email: true, phone: true, avatarUrl: true } },
       },
     })
 

@@ -10,9 +10,48 @@ const buildToken = (user) =>
     { expiresIn: '7d' }
   )
 
+const publicUser = (user) => ({
+  id: user.id,
+  email: user.email,
+  name: user.name,
+  role: user.role,
+  avatarUrl: user.avatarUrl || null,
+})
+
+const findValidInvitation = async (token, email) => {
+  if (!token) return null
+
+  const invitation = await prisma.invitation.findUnique({ where: { token } })
+  if (!invitation) return null
+  if (invitation.usedAt) return null
+  if (invitation.expiresAt.getTime() < Date.now()) return null
+  if (invitation.email.toLowerCase() !== String(email).toLowerCase()) return null
+
+  return invitation
+}
+
+const consumeInvitation = async (invitation, userId) => {
+  await prisma.invitation.update({
+    where: { id: invitation.id },
+    data: { usedAt: new Date() },
+  })
+
+  if (invitation.type === 'CLIENT' && invitation.clientId) {
+    await prisma.client.update({
+      where: { id: invitation.clientId },
+      data: { accountUserId: userId },
+    })
+  }
+}
+
 export const register = async (req, res, next) => {
   try {
-    const { email, password, name } = req.body
+    const { email, password, name, inviteToken } = req.body
+
+    const invitation = await findValidInvitation(inviteToken, email)
+    if (!invitation) {
+      return res.status(400).json({ error: 'Invitación no válida o caducada' })
+    }
 
     const existingUser = await prisma.user.findUnique({ where: { email } })
     if (existingUser) {
@@ -21,18 +60,20 @@ export const register = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         name,
-        role: 'TRAINER',
+        role: invitation.type,
         status: 'PENDING',
       },
     })
 
+    await consumeInvitation(invitation, user.id)
+
     return res.status(201).json({
-      message: 'Cuenta creada. Queda pendiente de aprobación por el administrador.',
+      message: 'Cuenta creada. Queda pendiente de aprobación.',
       pendingApproval: true,
     })
   } catch (error) {
@@ -71,7 +112,7 @@ export const login = async (req, res, next) => {
     return res.json({
       message: 'Inicio de sesión exitoso',
       token,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: publicUser(user),
     })
   } catch (error) {
     return next(error)
@@ -80,7 +121,7 @@ export const login = async (req, res, next) => {
 
 export const googleLogin = async (req, res, next) => {
   try {
-    const { idToken } = req.body
+    const { idToken, inviteToken } = req.body
 
     let decoded
     try {
@@ -100,17 +141,28 @@ export const googleLogin = async (req, res, next) => {
     })
 
     if (!user) {
-      await prisma.user.create({
+      const invitation = await findValidInvitation(inviteToken, email)
+      if (!invitation) {
+        return res.status(403).json({
+          error: 'Necesitas una invitación para crear una cuenta.',
+          code: 'INVITE_REQUIRED',
+        })
+      }
+
+      user = await prisma.user.create({
         data: {
           email,
           name: name || email.split('@')[0],
           firebaseUid: uid,
-          role: 'TRAINER',
+          role: invitation.type,
           status: 'PENDING',
         },
       })
+
+      await consumeInvitation(invitation, user.id)
+
       return res.status(403).json({
-        error: 'Cuenta creada. Queda pendiente de aprobación por el administrador.',
+        error: 'Cuenta creada. Queda pendiente de aprobación.',
         code: 'PENDING',
       })
     }
@@ -139,7 +191,7 @@ export const googleLogin = async (req, res, next) => {
     return res.json({
       message: 'Inicio de sesión con Google exitoso',
       token,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: publicUser(user),
     })
   } catch (error) {
     return next(error)

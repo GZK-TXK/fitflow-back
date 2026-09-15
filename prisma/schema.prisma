@@ -8,21 +8,24 @@ datasource db {
 }
 
 model User {
-  id               String   @id @default(cuid())
-  email            String   @unique
+  id               String    @id @default(cuid())
+  email            String    @unique
   name             String
   phone            String?
+  avatarUrl        String?
   password         String?
-  firebaseUid      String?  @unique
-  role             String   @default("TRAINER")
-  status           String   @default("ACTIVE")
+  firebaseUid      String?   @unique
+  role             String    @default("TRAINER")
+  status           String    @default("ACTIVE")
+  lastSeenAt       DateTime?
   stripeCustomerId String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  clients       Client[] @relation("TrainerClients")
-  clientAccount Client?  @relation("ClientAccount")
-  exercises     Exercise[]
+  clients            Client[]     @relation("TrainerClients")
+  clientAccount      Client?      @relation("ClientAccount")
+  exercises          Exercise[]
+  invitationsCreated Invitation[] @relation("InvitationCreator")
 }
 
 model Client {
@@ -37,6 +40,7 @@ model Client {
   account           User?              @relation("ClientAccount", fields: [accountUserId], references: [id], onDelete: SetNull)
   workouts          Workout[]
   scheduledWorkouts ScheduledWorkout[]
+  invitations       Invitation[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -89,4 +93,20 @@ model ScheduledWorkout {
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  type        String    // 'TRAINER' | 'CLIENT'
+  email       String
+  clientId    String?
+  client      Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?     @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
 }

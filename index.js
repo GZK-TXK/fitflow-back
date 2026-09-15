@@ -1,8 +1,10 @@
 import 'dotenv/config';
+import { createServer } from 'http';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
 
 // Importación de Rutas
 import authRoutes from './routes/authRoutes.js';
@@ -13,9 +15,15 @@ import adminRoutes from './routes/adminRoutes.js';
 import meRoutes from './routes/meRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import scheduleRoutes from './routes/scheduleRoutes.js';
+import invitationRoutes from './routes/invitationRoutes.js';
 
 // Importación de middlewares propios
 import { errorHandler } from './middlewares/errorHandler.js';
+import { authenticateToken } from './middlewares/authMiddleware.js';
+import { requireRole } from './middlewares/requireRole.js';
+import { apiDocsAuth } from './middlewares/apiDocsAuth.js';
+import { initSocket } from './lib/socket.js';
+import { swaggerSpec } from './lib/swagger.js';
 
 // Validación de variables de entorno críticas (fail-fast)
 const requiredEnv = ['DATABASE_URL', 'JWT_SECRET'];
@@ -68,6 +76,25 @@ const authLimiter = rateLimit({
   message: { error: 'Demasiados intentos de autenticación, espera 15 minutos' },
 });
 
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     tags: [Health]
+ *     summary: Health check
+ *     security: []
+ *     responses:
+ *       '200':
+ *         description: Service is up
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ok
+ */
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -80,6 +107,22 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/me', meRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/schedule', scheduleRoutes);
+app.use('/api/invitations', invitationRoutes);
+
+// Documentación de la API (solo administradores)
+app.get('/api-docs.json', authenticateToken, requireRole('ADMIN'), (req, res) => {
+  res.json(swaggerSpec);
+});
+
+app.use(
+  '/api-docs',
+  apiDocsAuth,
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customSiteTitle: 'FitFlow API Docs',
+    swaggerOptions: { persistAuthorization: true },
+  })
+);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' });
@@ -87,6 +130,10 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+const server = createServer(app);
+initSocket(server, allowedOrigins);
+
+server.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`📚 API docs (admin): http://localhost:${PORT}/api-docs`);
 });

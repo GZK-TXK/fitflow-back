@@ -43,3 +43,9 @@ export const updateClientRules = [
     .trim()
     .isLength({ max: 1000 }).withMessage('Las notas son demasiado largas'),
 ]
+
+export const updateAccessRules = [
+  body('status')
+    .isIn(['ACTIVE', 'DISABLED'])
+    .withMessage('El estado debe ser ACTIVE o DISABLED'),
+]

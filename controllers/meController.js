@@ -10,11 +10,13 @@ export const getMyProfile = async (req, res, next) => {
         name: client.name,
         email: client.email,
         phone: client.phone,
+        avatarUrl: client.avatarUrl,
       },
       trainer: {
         name: client.user?.name || null,
         email: client.user?.email || null,
         phone: client.user?.phone || null,
+        avatarUrl: client.user?.avatarUrl || null,
       },
     })
   } catch (error) {
